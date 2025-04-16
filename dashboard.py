@@ -71,8 +71,10 @@ fig_top10_clicks.update_layout(
     paper_bgcolor='rgba(0,0,0,0)',
     font={'color': '#f5f5dc', 'size': 16},
     title={'font': {'color': '#fff8dc', 'size': 20}},
-    xaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False),  # Меняем цвет и прозрачность сетки по оси X
-    yaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False)   # Меняем цвет и прозрачность сетки по оси Y
+    xaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False),
+    # Меняем цвет и прозрачность сетки по оси X
+    yaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False)
+    # Меняем цвет и прозрачность сетки по оси Y
 )
 
 # График кликов по дням
@@ -95,7 +97,7 @@ fig_clicks_per_day.update_layout(
     font={'color': '#f5f5dc', 'size': 16},
     title={'font': {'color': '#fff8dc', 'size': 20}},
     xaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False),  # Сетка для оси X
-    yaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False)   # Сетка для оси Y
+    yaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False)  # Сетка для оси Y
 )
 
 # График кликов по месяцам
@@ -119,7 +121,7 @@ fig_clicks_per_month.update_layout(
     font={'color': '#f5f5dc', 'size': 16},
     title={'font': {'color': '#fff8dc', 'size': 20}},
     xaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False),  # Сетка для оси X
-    yaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False)   # Сетка для оси Y
+    yaxis=dict(showgrid=True, gridcolor='rgba(255, 255, 255, 0.3)', zeroline=False)  # Сетка для оси Y
 )
 
 # Вёрстка дашборда
@@ -149,7 +151,6 @@ app.layout = html.Div([
                 className="animated-graph"
             )
         ], className="graph-container"),
-
 
         # Таблица
         html.Div([

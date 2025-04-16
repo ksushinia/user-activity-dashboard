@@ -5,6 +5,7 @@ from time import time
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tabulate import tabulate
+from pathlib import Path
 
 # Настройка стиля графиков
 plt.style.use('seaborn-v0_8')
@@ -13,11 +14,12 @@ sns.set_palette("husl")
 # ========================================
 # Конфигурация
 # ========================================
-CLICKS_FILE = '../../processed_data/clicks_processed.parquet'
-CAMPAIGN_FILE = '../../processed_data/campaign_processed.parquet'
-REGIONS_FILE = '../../processed_data/regions_processed.parquet'
-OUTPUT_FILE = ''
-PLOTS_DIR = '../../plots'
+PROJECT_ROOT = Path(__file__).parent.parent.parent  # Поднимаемся на уровень выше metrics/
+CLICKS_FILE = PROJECT_ROOT / 'processed_data' / 'clicks_processed.parquet'
+CAMPAIGN_FILE = PROJECT_ROOT / 'processed_data' / 'campaign_processed.parquet'
+REGIONS_FILE = PROJECT_ROOT / 'processed_data' / 'regions_processed.parquet'
+PLOTS_DIR = PROJECT_ROOT / 'plots'
+OUTPUT_FILE = PROJECT_ROOT / ''
 
 
 # ========================================

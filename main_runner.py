@@ -3,7 +3,10 @@ import logging
 import os
 import subprocess
 import sys
+import time
+import socket
 from pathlib import Path
+import webbrowser
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,25 +20,37 @@ logging.basicConfig(
 logger = logging.getLogger('PipelineRunner')
 
 
+def find_free_port(start_port=8050, max_attempts=100):
+    """Находит свободный порт для дашборда"""
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('', port))
+                return port
+        except socket.error:
+            continue
+    raise RuntimeError(f"Не удалось найти свободный порт в диапазоне {start_port}-{start_port + max_attempts}")
+
+
 def run_script(script_path):
     """Запускает скрипт с правильными путями"""
     script_name = Path(script_path).stem
     logger.info(f"Запуск скрипта: {script_name}")
 
     try:
-        # Устанавливаем рабочую директорию - корень проекта
         project_root = Path(__file__).parent
         os.chdir(project_root)
 
-        # Запускаем скрипт
         result = subprocess.run(
             [sys.executable, script_path],
             check=True,
             capture_output=True,
-            text=True
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            env={**os.environ, 'PYTHONPATH': str(project_root)}
         )
 
-        # Выводим логи
         if result.stdout:
             logger.info(result.stdout)
         if result.stderr:
@@ -51,29 +66,46 @@ def run_script(script_path):
 
 
 def run_dashboard(dashboard_path):
-    """Запускает дашборд"""
+    """Запускает дашборд с автоматическим определением порта"""
     logger.info("Запуск дашборда...")
     try:
         project_root = Path(__file__).parent
         os.chdir(project_root)
 
-        # Запускаем в отдельном процессе
+        # Находим свободный порт
+        port = find_free_port()
+        dashboard_url = f'http://127.0.0.1:{port}'
+
+        # Запускаем дашборд с указанием порта
         process = subprocess.Popen(
-            [sys.executable, dashboard_path],
+            [sys.executable, dashboard_path, '--port', str(port)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
 
-        # Открываем браузер
-        import webbrowser
-        webbrowser.open('http://127.0.0.1:8050')
+        # Ждем пока дашборд инициализируется
+        time.sleep(2)
 
-        logger.info("Дашборд запущен. Остановите процесс Ctrl+C в консоли дашборда")
-        return True
+        # Проверяем доступность дашборда
+        if is_port_open(port):
+            webbrowser.open(dashboard_url)
+            logger.info(f"Дашборд запущен по адресу: {dashboard_url}")
+            logger.info("Остановите процесс Ctrl+C в консоли дашборда")
+            return True
+        else:
+            logger.error("Дашборд не запустился на указанном порту")
+            return False
+
     except Exception as e:
         logger.error(f"Ошибка при запуске дашборда: {str(e)}")
         return False
+
+
+def is_port_open(port):
+    """Проверяет доступность порта"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('127.0.0.1', port)) == 0
 
 
 def main():
@@ -103,7 +135,6 @@ def main():
 
     # Запускаем дашборд последним
     run_dashboard(scripts[-1])
-
 
 if __name__ == '__main__':
     main()
