@@ -6,6 +6,7 @@ import sys
 # ================== ИСПРАВЛЕННЫЙ БЛОК ==================
 # Получаем абсолютный путь к корню проекта
 project_root = Path(__file__).parent.parent
+(project_root / 'processed_data').mkdir(parents=True, exist_ok=True)
 INPUT_FILE = project_root / 'data' / 'regions.csv'  # Абсолютный путь
 OUTPUT_FILE = project_root / 'processed_data' / 'regions_processed'  # Без расширения
 # ========================================================

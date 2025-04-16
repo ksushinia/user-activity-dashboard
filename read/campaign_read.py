@@ -7,6 +7,7 @@ import sys
 # Конфигурация с абсолютными путями
 # ========================================
 project_root = Path(__file__).parent.parent  # Получаем корень проекта
+(project_root / 'processed_data').mkdir(parents=True, exist_ok=True)
 INPUT_FILE = project_root / 'data' / 'campaign.csv'  # Абсолютный путь
 OUTPUT_FILE = project_root / 'processed_data' / 'campaign_processed'  # Без расширения
 CHUNK_SIZE = 50_000

@@ -7,6 +7,7 @@ import sys
 # Конфигурация - используем абсолютные пути
 # ========================================
 project_root = Path(__file__).parent.parent
+(project_root / 'processed_data').mkdir(parents=True, exist_ok=True)
 INPUT_FILE = project_root / 'data' / 'clicks.csv'  # Абсолютный путь
 OUTPUT_FILE = project_root / 'processed_data' / 'clicks_processed'  # Без расширения
 CHUNK_SIZE = 50_000

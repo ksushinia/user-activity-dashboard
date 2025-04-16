@@ -15,11 +15,12 @@ sns.set_palette("husl")
 # Конфигурация
 # ========================================
 PROJECT_ROOT = Path(__file__).parent.parent.parent  # Поднимаемся на уровень выше metrics/
+(PROJECT_ROOT / 'processed_data').mkdir(parents=True, exist_ok=True)
 CLICKS_FILE = PROJECT_ROOT / 'processed_data' / 'clicks_processed.parquet'
 CAMPAIGN_FILE = PROJECT_ROOT / 'processed_data' / 'campaign_processed.parquet'
 REGIONS_FILE = PROJECT_ROOT / 'processed_data' / 'regions_processed.parquet'
 PLOTS_DIR = PROJECT_ROOT / 'plots'
-OUTPUT_FILE = PROJECT_ROOT / ''
+OUTPUT_FILE = PROJECT_ROOT / 'processed_data' / 'processed_data'
 
 
 # ========================================
