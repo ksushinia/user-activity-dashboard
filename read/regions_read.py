@@ -1,26 +1,53 @@
 import pandas as pd
-from time import time
+import os
+from pathlib import Path
 import sys
+import logging
+from time import time
 
-# ========================================
-# Конфигурация
-# ========================================
-INPUT_FILE = '../data/regions.csv'
-OUTPUT_FILE = 'regions_processed'  # Без расширения, добавим позже
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# ================== КОНФИГУРАЦИЯ С АБСОЛЮТНЫМИ ПУТЯМИ ==================
+# Получаем корень проекта (2 уровня вверх от расположения скрипта)
+project_root = Path(__file__).parent.parent
+
+# Абсолютные пути к файлам
+INPUT_FILE = project_root / 'data' / 'regions.csv'
+OUTPUT_FILE = project_root / 'processed_data' / 'regions_processed'  # Без расширения
+# =======================================================================
+
 CHUNK_SIZE = 50_000
 LOG_EVERY = 5
-SAMPLE_SIZE = 50  # Количество строк для вывода
+SAMPLE_SIZE = 50
 
 DTYPES = {
     'region_id': 'int32',
     'name': 'str'
 }
 
-# ========================================
-# Обработка
-# ========================================
+
+def check_file_exists(file_path):
+    """Проверяет существование файла"""
+    if not file_path.exists():
+        logger.error(f"Файл не найден: {file_path}")
+        logger.info(f"Текущая рабочая директория: {os.getcwd()}")
+        logger.info("Убедитесь, что файл находится в папке data/")
+        return False
+    return True
+
+
 def process_chunks():
+    """Обработка данных по чанкам"""
     start_time = time()
+
+    # Проверяем наличие файла
+    if not check_file_exists(INPUT_FILE):
+        sys.exit(1)
 
     result_chunks = []
     stats = {
@@ -30,6 +57,8 @@ def process_chunks():
     }
 
     try:
+        logger.info(f"Начало обработки файла: {INPUT_FILE}")
+
         for i, chunk in enumerate(pd.read_csv(
                 INPUT_FILE,
                 chunksize=CHUNK_SIZE,
@@ -44,7 +73,7 @@ def process_chunks():
 
             if (i + 1) % LOG_EVERY == 0:
                 elapsed = time() - start_time
-                print(
+                logger.info(
                     f"[Чанк {i + 1}] "
                     f"Обработано: {stats['total_rows']:,} строк, "
                     f"Время: {elapsed:.1f} сек"
@@ -53,36 +82,37 @@ def process_chunks():
         df_final = pd.concat(result_chunks, ignore_index=True)
         stats['unique_regions'] = df_final['region_id'].nunique()
 
-        print("\n" + "=" * 50)
-        print(f"ОБРАБОТКА ЗАВЕРШЕНА")
-        print(f"Всего строк:       {stats['total_rows']:,}")
-        print(f"Уникальных регионов: {stats['unique_regions']:,}")
-        print(f"Общее время:       {time() - start_time:.1f} сек")
-        print("=" * 50 + "\n")
+        logger.info("\n" + "=" * 50)
+        logger.info(f"ОБРАБОТКА ЗАВЕРШЕНА")
+        logger.info(f"Всего строк:       {stats['total_rows']:,}")
+        logger.info(f"Уникальных регионов: {stats['unique_regions']:,}")
+        logger.info(f"Общее время:       {time() - start_time:.1f} сек")
+        logger.info("=" * 50)
 
-        # Вывод первых 20 строк для проверки
-        print("Первые 20 строк обработанных данных:")
-        print(df_final.head(SAMPLE_SIZE).to_string())
-        print("\n" + "=" * 50)
+        # Вывод первых строк для проверки
+        logger.info("\nПервые 20 строк обработанных данных:")
+        logger.info(df_final.head(SAMPLE_SIZE).to_string())
 
         return df_final
 
     except Exception as e:
-        print(f"Ошибка при обработке: {str(e)}", file=sys.stderr)
+        logger.error(f"Ошибка при обработке: {str(e)}", exc_info=True)
         sys.exit(1)
 
 
-# ========================================
-# Сохранение с проверкой доступных форматов
-# ========================================
 def save_data(df, base_filename):
+    """Сохранение данных с проверкой доступных форматов"""
     try:
+        # Создаем папку processed_data, если её нет
+        output_dir = project_root / 'processed_data'
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         # Пробуем сохранить в Parquet (предпочтительно)
         try:
             import pyarrow
             parquet_file = f"{base_filename}.parquet"
             df.to_parquet(parquet_file, engine='pyarrow')
-            print(f"Данные сохранены в {parquet_file} (формат Parquet)")
+            logger.info(f"Данные сохранены в {parquet_file} (формат Parquet)")
             return
         except ImportError:
             pass
@@ -92,7 +122,7 @@ def save_data(df, base_filename):
             import fastparquet
             parquet_file = f"{base_filename}.parquet"
             df.to_parquet(parquet_file, engine='fastparquet')
-            print(f"Данные сохранены в {parquet_file} (формат Parquet через fastparquet)")
+            logger.info(f"Данные сохранены в {parquet_file} (формат Parquet через fastparquet)")
             return
         except ImportError:
             pass
@@ -100,21 +130,20 @@ def save_data(df, base_filename):
         # Если оба варианта с Parquet не сработали, сохраняем в сжатый CSV
         csv_file = f"{base_filename}.csv.gz"
         df.to_csv(csv_file, compression='gzip', index=False)
-        print(f"Данные сохранены в {csv_file} (формат CSV с gzip-сжатием)")
+        logger.info(f"Данные сохранены в {csv_file} (формат CSV с gzip-сжатием)")
 
     except Exception as e:
-        print(f"Критическая ошибка при сохранении: {str(e)}", file=sys.stderr)
+        logger.error(f"Критическая ошибка при сохранении: {str(e)}", exc_info=True)
         sys.exit(1)
 
 
-# ========================================
-# Главная функция
-# ========================================
 if __name__ == '__main__':
-    print("Начало обработки regions.csv...")
+    logger.info(f"Запуск обработки файла: {INPUT_FILE}")
+    logger.info(f"Проверка существования файла: {INPUT_FILE.exists()}")
+
     df = process_chunks()
 
-    print("\nСохранение результатов...")
+    logger.info("\nСохранение результатов...")
     save_data(df, OUTPUT_FILE)
 
-    print("\nГотово! Скрипт завершил работу.")
+    logger.info("\nГотово! Скрипт завершил работу.")

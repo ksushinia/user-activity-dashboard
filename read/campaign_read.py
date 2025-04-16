@@ -1,20 +1,24 @@
-import pandas as pd
 from time import time
+import pandas as pd
+from pathlib import Path
 import sys
 
 # ========================================
-# Конфигурация
+# Конфигурация с абсолютными путями
 # ========================================
-INPUT_FILE = '../data/campaign.csv'
-OUTPUT_FILE = 'campaign_processed'  # Без расширения, добавим позже
+project_root = Path(__file__).parent.parent  # Получаем корень проекта
+INPUT_FILE = project_root / 'data' / 'campaign.csv'  # Абсолютный путь
+OUTPUT_FILE = project_root / 'processed_data' / 'campaign_processed'  # Без расширения
 CHUNK_SIZE = 50_000
 LOG_EVERY = 5
-SAMPLE_SIZE = 50  # Количество строк для вывода
+SAMPLE_SIZE = 50
 
 DTYPES = {
     'id': 'int32',
-    'created_at': 'str'  # Будем парсить в datetime позже
+    'created_at': 'str'
 }
+
+# ... остальной код скрипта остается без изменений ...
 
 # ========================================
 # Обработка

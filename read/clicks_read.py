@@ -1,12 +1,14 @@
-import pandas as pd
 from time import time
+import pandas as pd
+from pathlib import Path
 import sys
 
 # ========================================
-# Конфигурация
+# Конфигурация - используем абсолютные пути
 # ========================================
-INPUT_FILE = '../data/clicks.csv'
-OUTPUT_FILE = 'clicks_processed'  # Без расширения, добавим позже
+project_root = Path(__file__).parent.parent
+INPUT_FILE = project_root / 'data' / 'clicks.csv'  # Абсолютный путь
+OUTPUT_FILE = project_root / 'processed_data' / 'clicks_processed'  # Без расширения
 CHUNK_SIZE = 50_000
 LOG_EVERY = 5
 SAMPLE_SIZE = 50  # Количество строк для вывода
