@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 
 # Загружаем данные
-df = pd.read_parquet("campaign_activity_first_4_hours.parquet")
+df = pd.read_parquet("metrics/campaign_activity_first_4_hours/campaign_activity_first_4_hours.parquet")
 
 # Инициализация Dash-приложения
 app = dash.Dash(__name__, external_stylesheets=['styles.css'])
