@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 CONFIG = {
     'input_files': {
         'clicks': {
-            'path': 'C:/Users/79508/Desktop/4 семестри/Хакатон/Stream_telecom/data/clicks.csv',
+            'path': 'data/clicks.csv',
             'dtypes': {
                 'uid': 'string',
                 'member_id': 'int32',
@@ -36,7 +36,7 @@ CONFIG = {
             'chunk_size': 50000
         },
         'regions': {
-            'path': 'C:/Users/79508/Desktop/4 семестри/Хакатон/Stream_telecom/data/regions.csv',
+            'path': 'data/regions.csv',
             'dtypes': {
                 'region_id': 'int8',
                 'region_name': 'string'
@@ -44,7 +44,7 @@ CONFIG = {
             'chunk_size': None
         },
         'campaign': {
-            'path': 'C:/Users/79508/Desktop/4 семестри/Хакатон/Stream_telecom/data/campaign.csv',
+            'path': 'data/campaign.csv',
             'dtypes': {
                 'id': 'int32',
                 'name': 'string',
