@@ -1,11 +1,10 @@
-# response_analysis.py
-import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import timedelta
 import sys
 from time import time
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tabulate import tabulate
 from pathlib import Path
 
 # Настройка стиля графиков
@@ -15,69 +14,34 @@ sns.set_palette("husl")
 # ========================================
 # Конфигурация
 # ========================================
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-PLOTS_DIR = PROJECT_ROOT / 'plots' / 'response_analysis'
-PLOTS_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_FILE = PROJECT_ROOT / 'processed_data' / 'response_analysis'
+PROJECT_ROOT = Path(__file__).parent.parent.parent  # Поднимаемся на уровень выше metrics/
+(PROJECT_ROOT / 'processed_data').mkdir(parents=True, exist_ok=True)
+CLICKS_FILE = PROJECT_ROOT / 'processed_data' / 'clicks_processed.parquet'
+CAMPAIGN_FILE = PROJECT_ROOT / 'processed_data' / 'campaign_processed.parquet'
+PLOTS_DIR = PROJECT_ROOT / 'plots'
+OUTPUT_FILE = PROJECT_ROOT / 'processed_data' / 'response_time_analysis'
 
 
 # ========================================
 # Загрузка данных
 # ========================================
-def load_and_prepare_data():
-    print("Загрузка и подготовка данных...")
+def load_data():
+    print("Загрузка данных для анализа скорости реакции...")
     start_time = time()
 
     try:
-        # 1. Загружаем данные кампаний
-        campaigns = pd.read_parquet(PROJECT_ROOT / 'processed_data' / 'campaign_processed.parquet')
+        # Загружаем обработанные данные
+        clicks = pd.read_parquet(CLICKS_FILE)
+        campaigns = pd.read_parquet(CAMPAIGN_FILE)
 
-        # 2. Загружаем данные кликов
-        clicks = pd.read_parquet(PROJECT_ROOT / 'processed_data' / 'clicks_processed.parquet')
+        # Преобразуем created_at из Unix timestamp в наносекундах
+        campaigns['created_at'] = pd.to_datetime(campaigns['created_at'].astype('int64') // 10 ** 9, unit='s')
 
-        # 3. Преобразуем временные метки
-        def convert_timestamp(ts):
-            try:
-                # Если это числовой timestamp (наносекунды)
-                if pd.api.types.is_number(ts):
-                    return pd.to_datetime(ts, unit='ns')
-                # Если это строка
-                elif isinstance(ts, str):
-                    # Попробуем преобразовать как число (наносекунды)
-                    try:
-                        return pd.to_datetime(float(ts), unit='ns')
-                    except:
-                        # Если не число, пробуем как строку даты
-                        return pd.to_datetime(ts)
-                return pd.NaT
-            except:
-                return pd.NaT
-
-        campaigns['created_at'] = campaigns['created_at'].apply(convert_timestamp)
-        clicks['click_time'] = clicks['click_time'].apply(convert_timestamp)
-
-        # 4. Находим время первого клика для каждой кампании
-        first_clicks = clicks.groupby('campaign_id')['click_time'].min().reset_index()
-        first_clicks.rename(columns={'click_time': 'first_click_time'}, inplace=True)
-
-        # 5. Объединяем с данными кампаний
-        campaigns = campaigns.merge(first_clicks, on='campaign_id', how='left')
-
-        # 6. Добавляем количество кликов по кампаниям
-        click_counts = clicks.groupby('campaign_id').size().reset_index(name='clicks_count')
-        campaigns = campaigns.merge(click_counts, on='campaign_id', how='left')
-
-        # Заполняем пропуски для кампаний без кликов
-        campaigns['clicks_count'] = campaigns['clicks_count'].fillna(0)
-
-        # Удаляем строки с некорректными датами
-        campaigns = campaigns.dropna(subset=['created_at', 'first_click_time'])
-
-        print(f"Данные загружены и подготовлены за {time() - start_time:.1f} сек")
+        print(f"Данные загружены за {time() - start_time:.1f} сек")
+        print(f"Кликов: {len(clicks):,}")
         print(f"Кампаний: {len(campaigns):,}")
-        print(f"Из них с кликами: {len(campaigns[campaigns['clicks_count'] > 0]):,}")
 
-        return campaigns
+        return clicks, campaigns
 
     except Exception as e:
         print(f"Ошибка загрузки данных: {str(e)}", file=sys.stderr)
@@ -87,102 +51,90 @@ def load_and_prepare_data():
 # ========================================
 # Расчет скорости реакции клиентов
 # ========================================
-def calculate_response_stats(campaigns):
+def calculate_response_time(clicks, campaigns):
     print("\nРасчет скорости реакции клиентов...")
     start_time = time()
 
-    # Рассчитываем время реакции (в секундах)
-    campaigns['response_time_sec'] = (campaigns['first_click_time'] - campaigns['created_at']).dt.total_seconds()
+    # Объединяем клики с информацией о кампаниях
+    merged = pd.merge(clicks, campaigns, left_on='campaign_id', right_on='id', how='left')
 
-    # Фильтруем только кампании с кликами
-    responded_campaigns = campaigns[campaigns['clicks_count'] > 0].copy()
+    # Вычисляем время реакции (разница между кликом и созданием кампании)
+    merged['response_time'] = (merged['click_time'] - merged['created_at']).dt.total_seconds()
 
-    # Основные метрики
-    stats = {
-        'total_campaigns': len(campaigns),
-        'responded_campaigns': len(responded_campaigns),
-        'response_rate': len(responded_campaigns) / len(campaigns) * 100,
-        'avg_response_sec': responded_campaigns['response_time_sec'].mean(),
-        'median_response_sec': responded_campaigns['response_time_sec'].median(),
-        'min_response_sec': responded_campaigns['response_time_sec'].min(),
-        'max_response_sec': responded_campaigns['response_time_sec'].max(),
-        'std_response_sec': responded_campaigns['response_time_sec'].std(),
-        'percentile_90': np.percentile(responded_campaigns['response_time_sec'], 90),
-        'percentile_95': np.percentile(responded_campaigns['response_time_sec'], 95)
+    # Фильтруем некорректные значения (если клик был до создания кампании)
+    merged = merged[merged['response_time'] >= 0]
+
+    # Добавляем время реакции в часах
+    merged['response_time_hours'] = merged['response_time'] / 3600
+
+    # Группируем по кампаниям для анализа
+    campaign_response = merged.groupby('campaign_id').agg(
+        total_clicks=('uid', 'count'),
+        avg_response_time_seconds=('response_time', 'mean'),
+        median_response_time_seconds=('response_time', 'median'),
+        min_response_time_seconds=('response_time', 'min'),
+        max_response_time_seconds=('response_time', 'max'),
+        avg_response_time_hours=('response_time_hours', 'mean'),
+        median_response_time_hours=('response_time_hours', 'median')
+    ).reset_index()
+
+    # Добавляем информацию о кампании
+    campaign_response = pd.merge(campaign_response,
+                                 campaigns[['id', 'created_at']],
+                                 left_on='campaign_id',
+                                 right_on='id',
+                                 how='left')
+
+    # Общая статистика по всем кликам
+    overall_stats = {
+        'total_clicks': len(merged),
+        'avg_response_time_seconds': merged['response_time'].mean(),
+        'median_response_time_seconds': merged['response_time'].median(),
+        'min_response_time_seconds': merged['response_time'].min(),
+        'max_response_time_seconds': merged['response_time'].max(),
+        'avg_response_time_hours': merged['response_time_hours'].mean(),
+        'median_response_time_hours': merged['response_time_hours'].median()
     }
 
-    # Добавляем читаемые временные форматы
-    stats.update({
-        'avg_response': str(timedelta(seconds=stats['avg_response_sec'])),
-        'median_response': str(timedelta(seconds=stats['median_response_sec'])),
-        'min_response': str(timedelta(seconds=stats['min_response_sec'])),
-        'max_response': str(timedelta(seconds=stats['max_response_sec'])),
-        'percentile_90_response': str(timedelta(seconds=stats['percentile_90'])),
-        'percentile_95_response': str(timedelta(seconds=stats['percentile_95']))
-    })
+    print(f"Анализ завершен за {time() - start_time:.1f} сек")
+    print(f"Проанализировано {len(merged)} кликов")
+    print(f"Среднее время реакции: {overall_stats['avg_response_time_hours']:.2f} часов")
+    print(f"Медианное время реакции: {overall_stats['median_response_time_hours']:.2f} часов")
 
-    print(f"Расчет завершен за {time() - start_time:.1f} сек")
-    return stats, responded_campaigns
+    return campaign_response, overall_stats
 
 
-def visualize_response_stats(responded_campaigns, stats):
+# ========================================
+# Визуализация данных
+# ========================================
+def visualize_response_data(campaign_response, overall_stats):
+    import os
+    if not os.path.exists(PLOTS_DIR):
+        os.makedirs(PLOTS_DIR)
+
     print("\nСоздание визуализаций скорости реакции...")
 
     # 1. Распределение времени реакции
     plt.figure(figsize=(12, 6))
-    sns.histplot(responded_campaigns['response_time_sec'] / 60,  # в минутах
-                 bins=50,
-                 kde=True,
-                 color='skyblue')
-    plt.title('Распределение времени реакции клиентов')
-    plt.xlabel('Время реакции (минуты)')
+    sns.histplot(data=campaign_response, x='avg_response_time_hours', bins=50, kde=True)
+    plt.title('Распределение среднего времени реакции по кампаниям (часы)')
+    plt.xlabel('Среднее время реакции (часы)')
     plt.ylabel('Количество кампаний')
-    plt.axvline(stats['median_response_sec'] / 60, color='red', linestyle='--',
-                label=f'Медиана: {stats["median_response"]}')
-    plt.legend()
     plt.tight_layout()
-    plt.savefig(f'{PLOTS_DIR}/response_time_distribution.png', dpi=300)
+    plt.savefig(f'{PLOTS_DIR}/response_time_distribution.png')
     plt.close()
 
-    # 2. Скорость реакции по дням недели
-    responded_campaigns['day_of_week'] = responded_campaigns['created_at'].dt.day_name()
-    weekdays_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    russian_weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-
+    # 2. Топ-10 кампаний по скорости реакции
+    top10_fastest = campaign_response.nsmallest(10, 'avg_response_time_hours')[
+        ['campaign_id', 'avg_response_time_hours']]
     plt.figure(figsize=(12, 6))
-    ax = sns.boxplot(data=responded_campaigns,
-                     x='day_of_week',
-                     y='response_time_sec',
-                     order=weekdays_order,
-                     showfliers=False,
-                     color='lightgreen')
-
-    # Заменяем английские названия на русские
-    ax.set_xticklabels(russian_weekdays)
-
-    plt.title('Скорость реакции клиентов по дням недели')
-    plt.xlabel('День недели')
-    plt.ylabel('Время реакции (секунды)')
-    plt.yscale('log')
+    sns.barplot(data=top10_fastest, x='campaign_id', y='avg_response_time_hours', palette='viridis')
+    plt.title('Топ-10 кампаний с самым быстрым временем реакции')
+    plt.xlabel('ID кампании')
+    plt.ylabel('Среднее время реакции (часы)')
+    plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(f'{PLOTS_DIR}/response_time_by_weekday.png', dpi=300)
-    plt.close()
-
-    # 3. Скорость реакции по часам дня
-    responded_campaigns['hour_of_day'] = responded_campaigns['created_at'].dt.hour
-
-    plt.figure(figsize=(12, 6))
-    sns.boxplot(data=responded_campaigns,
-                x='hour_of_day',
-                y='response_time_sec',
-                showfliers=False,
-                color='salmon')
-    plt.title('Скорость реакции клиентов по часам дня')
-    plt.xlabel('Час дня')
-    plt.ylabel('Время реакции (секунды)')
-    plt.yscale('log')
-    plt.tight_layout()
-    plt.savefig(f'{PLOTS_DIR}/response_time_by_hour.png', dpi=300)
+    plt.savefig(f'{PLOTS_DIR}/top10_fastest_campaigns.png')
     plt.close()
 
     print(f"Графики сохранены в папку {PLOTS_DIR}")
@@ -191,47 +143,65 @@ def visualize_response_stats(responded_campaigns, stats):
 # ========================================
 # Сохранение результатов
 # ========================================
-def save_response_stats(stats, responded_campaigns):
-    print("\nСохранение результатов анализа...")
+def save_response_results(campaign_response, overall_stats):
+    print("\nСохранение результатов анализа скорости реакции...")
 
     try:
-        # Сохраняем статистику в JSON
-        pd.DataFrame([stats]).to_json(f"{OUTPUT_FILE}_stats.json", orient='records', indent=2)
+        # Сохраняем статистику по кампаниям
+        campaign_response.to_parquet(f"{OUTPUT_FILE}_campaign_stats.parquet", engine='pyarrow')
 
-        # Сохраняем данные по кампаниям с кликами
-        responded_campaigns.to_parquet(f"{OUTPUT_FILE}_data.parquet")
+        # Сохраняем общую статистику в JSON
+        import json
+        with open(f"{OUTPUT_FILE}_overall_stats.json", 'w') as f:
+            json.dump(overall_stats, f, indent=4)
 
-        print(f"Результаты сохранены в {OUTPUT_FILE}_stats.json и {OUTPUT_FILE}_data.parquet")
+        print(f"Результаты сохранены в {OUTPUT_FILE}_campaign_stats.parquet и {OUTPUT_FILE}_overall_stats.json")
     except Exception as e:
         print(f"Ошибка при сохранении: {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 
 # ========================================
+# Вывод красивых таблиц
+# ========================================
+def print_response_tables(campaign_response, overall_stats):
+    print("\nСводная статистика по скорости реакции:")
+
+    # Общая статистика
+    print("\nОбщая статистика времени реакции:")
+    overall_table = [
+        ["Общее количество кликов", f"{overall_stats['total_clicks']:,}"],
+        ["Среднее время реакции", f"{overall_stats['avg_response_time_hours']:.2f} часов"],
+        ["Медианное время реакции", f"{overall_stats['median_response_time_hours']:.2f} часов"],
+        ["Минимальное время реакции", f"{overall_stats['min_response_time_seconds']:.0f} секунд"],
+        ["Максимальное время реакции", f"{overall_stats['max_response_time_seconds']:.0f} секунд"]
+    ]
+    print(tabulate(overall_table, headers=["Метрика", "Значение"], tablefmt='pretty'))
+
+    # Топ-10 самых быстрых кампаний
+    top10_fastest = campaign_response.nsmallest(10, 'avg_response_time_hours')[
+        ['campaign_id', 'avg_response_time_hours']]
+    print("\nТоп-10 кампаний с самым быстрым временем реакции:")
+    print(tabulate(top10_fastest, headers='keys', tablefmt='pretty', floatfmt=".2f"))
+
+
+# ========================================
 # Главная функция
 # ========================================
 if __name__ == '__main__':
-    # Загрузка и подготовка данных
-    campaigns = load_and_prepare_data()
+    # Загрузка данных
+    clicks, campaigns = load_data()
 
-    # Расчет статистики
-    stats, responded_campaigns = calculate_response_stats(campaigns)
+    # Расчет скорости реакции
+    campaign_response, overall_stats = calculate_response_time(clicks, campaigns)
 
-    # Вывод результатов
-    print("\nСтатистика скорости реакции клиентов:")
-    print(f"Всего кампаний: {stats['total_campaigns']:,}")
-    print(f"Кампании с кликами: {stats['responded_campaigns']:,} ({stats['response_rate']:.1f}%)")
-    print(f"\nСреднее время реакции: {stats['avg_response']}")
-    print(f"Медианное время реакции: {stats['median_response']}")
-    print(f"Минимальное время: {stats['min_response']}")
-    print(f"Максимальное время: {stats['max_response']}")
-    print(f"90-й процентиль: {stats['percentile_90_response']}")
-    print(f"95-й процентиль: {stats['percentile_95_response']}")
+    # Визуализация данных
+    visualize_response_data(campaign_response, overall_stats)
 
-    # Визуализация
-    visualize_response_stats(responded_campaigns, stats)
+    # Вывод таблиц
+    print_response_tables(campaign_response, overall_stats)
 
-    # Сохранение
-    save_response_stats(stats, responded_campaigns)
+    # Сохранение результатов
+    save_response_results(campaign_response, overall_stats)
 
-    print("\nАнализ скорости реакции клиентов завершен!")
+    print("\nГотово! Анализ скорости реакции завершен.")
