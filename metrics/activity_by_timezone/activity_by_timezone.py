@@ -102,9 +102,7 @@ REGION_NAMES = {
     101: "Забайкальский край"
 }
 
-# ========================================
 # Конфигурация
-# ========================================
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 (PROJECT_ROOT / 'processed_data').mkdir(parents=True, exist_ok=True)
 CLICKS_FILE = PROJECT_ROOT / 'processed_data' / 'clicks_processed.parquet'
@@ -114,9 +112,7 @@ PLOTS_DIR = PROJECT_ROOT / 'plots'
 OUTPUT_FILE = PROJECT_ROOT / 'processed_data' / 'activity_by_timezone'
 
 
-# ========================================
 # Загрузка данных
-# ========================================
 def load_data():
     print("Загрузка данных для анализа активности...")
     start_time = time()
@@ -140,9 +136,7 @@ def load_data():
         sys.exit(1)
 
 
-# ========================================
 # Анализ активности по часам
-# ========================================
 def analyze_activity_by_hour(clicks):
     print("\nАнализ активности по часам...")
     start_time = time()
@@ -165,9 +159,7 @@ def analyze_activity_by_hour(clicks):
         return None
 
 
-# ========================================
 # Анализ активности по регионам
-# ========================================
 def analyze_activity_by_region(clicks):
     print("\nАнализ активности по регионам...")
     start_time = time()
@@ -193,9 +185,7 @@ def analyze_activity_by_region(clicks):
         return None
 
 
-# ========================================
 # Визуализация данных
-# ========================================
 def visualize_data(hour_activity, region_activity):
     import os
     if not os.path.exists(PLOTS_DIR):
@@ -250,9 +240,6 @@ def visualize_data(hour_activity, region_activity):
     print(f"Графики сохранены в {PLOTS_DIR}")
 
 
-# ========================================
-# Главная функция
-# ========================================
 if __name__ == '__main__':
     clicks, campaigns, regions = load_data()
     hour_activity = analyze_activity_by_hour(clicks)
@@ -260,6 +247,16 @@ if __name__ == '__main__':
 
     if hour_activity is not None and region_activity is not None:
         visualize_data(hour_activity, region_activity)
+
+        # Сохраняем результаты анализа в файлы Parquet
+        try:
+            hour_activity.to_parquet(PROJECT_ROOT / 'processed_data' / 'activity_by_timezone_by_hour.parquet')
+            region_activity.to_parquet(PROJECT_ROOT / 'processed_data' / 'activity_by_timezone_by_region.parquet')
+            print("\nРезультаты анализа сохранены в файлы:")
+            print(f"- {PROJECT_ROOT / 'processed_data' / 'activity_by_timezone_by_hour.parquet'}")
+            print(f"- {PROJECT_ROOT / 'processed_data' / 'activity_by_timezone_by_region.parquet'}")
+        except Exception as e:
+            print(f"\nОшибка при сохранении результатов анализа: {str(e)}", file=sys.stderr)
 
         print("\nТоп-5 часов активности:")
         print(tabulate(hour_activity.nlargest(5, 'total_clicks'),
