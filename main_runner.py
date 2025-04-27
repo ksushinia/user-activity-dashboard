@@ -14,7 +14,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('pipeline.log')
+        logging.FileHandler('pipeline.log', encoding='utf-8')  # Добавьте encoding
     ]
 )
 logger = logging.getLogger('PipelineRunner')
@@ -72,33 +72,49 @@ def run_dashboard(dashboard_path):
         project_root = Path(__file__).parent
         os.chdir(project_root)
 
-        # Находим свободный порт
         port = find_free_port()
         dashboard_url = f'http://127.0.0.1:{port}'
 
-        # Запускаем дашборд с указанием порта
+        # Запускаем процесс с явным указанием UTF-8
         process = subprocess.Popen(
             [sys.executable, dashboard_path, '--port', str(port)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            encoding='utf-8',
+            bufsize=1,
+            universal_newlines=True
         )
 
-        # Ждем пока дашборд инициализируется
-        time.sleep(2)
+        # Даем больше времени на запуск (до 30 секунд)
+        for _ in range(30):
+            if is_port_open(port):
+                webbrowser.open(dashboard_url)
+                logger.info(f"Дашборд запущен по адресу: {dashboard_url}")
 
-        # Проверяем доступность дашборда
-        if is_port_open(port):
-            webbrowser.open(dashboard_url)
-            logger.info(f"Дашборд запущен по адресу: {dashboard_url}")
-            logger.info("Остановите процесс Ctrl+C в консоли дашборда")
-            return True
-        else:
-            logger.error("Дашборд не запустился на указанном порту")
-            return False
+                # Чтение вывода в реальном времени
+                def log_stream(stream, logger_func):
+                    while True:
+                        line = stream.readline()
+                        if not line:
+                            break
+                        logger_func(line.strip())
+
+                import threading
+                threading.Thread(target=log_stream, args=(process.stdout, logger.info), daemon=True).start()
+                threading.Thread(target=log_stream, args=(process.stderr, logger.error), daemon=True).start()
+
+                return True
+            time.sleep(1)
+
+        logger.error(f"Дашборд не запустился на порту {port} после 30 секунд ожидания")
+        process.terminate()
+        return False
 
     except Exception as e:
-        logger.error(f"Ошибка при запуске дашборда: {str(e)}")
+        logger.error(f"Ошибка при запуске дашборда: {str(e)}", exc_info=True)
+        if 'process' in locals():
+            process.terminate()
         return False
 
 
@@ -122,8 +138,14 @@ def main():
         project_root / 'read' / 'campaign_read.py',
         project_root / 'read' / 'regions_read.py',
         project_root / 'data_processor.py',
+        project_root / 'metrics' / 'activity_by_timezone' / 'activity_by_timezone.py',
+        project_root / 'metrics' / 'campaign dinamics' / 'campaign_dinamics.py',
         project_root / 'metrics' / 'campaign_activity_first_4_hours' / '4_hour_activity.py',
         project_root / 'metrics' / 'clicks_per_day_and_month_activity' / 'clicks_per_day_and_month.py',
+        project_root / 'metrics' / 'geographic_pie_chart' / 'geographic_pie_chart.py',
+        project_root / 'metrics' / 'geography distribution' / 'geography distribution.py',
+        project_root / 'metrics' / 'response_analysis' / 'response analysis.py',
+        project_root / 'metrics' / 'time_optimizer' / 'time_optimizer.py',
         project_root / 'dashboard.py'
     ]
 
